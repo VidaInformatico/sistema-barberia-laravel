@@ -1,0 +1,230 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Configuración para navegadores Webkit (Chrome, Edge, Safari, Opera) */
+
+/* 1. Ancho del scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+/* 2. El "camino" (track) del scrollbar */
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* 3. La "manija" (thumb) del scrollbar */
+::-webkit-scrollbar-thumb {
+    background-color: #d1d5db; /* color gris-300 */
+    border-radius: 20px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+}
+
+/* 4. Efecto hover sobre la manija */
+::-webkit-scrollbar-thumb:hover {
+    background-color: #9ca3af; /* color gris-400 para contraste */
+}
+
+/* 5. Para Firefox (estándar moderno) */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #d1d5db transparent;
+}
+
+@layer components {
+
+    /* Layout y Header */
+    .page-container {
+        @apply max-w-6xl mx-auto min-h-screen font-sans antialiased text-slate-900;
+    }
+
+    .page-header {
+        @apply flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8;
+    }
+
+    .header-icon {
+        @apply w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200 text-white text-lg;
+    }
+
+    /* Barra de Herramientas (Search & Select) */
+    .toolbar-container {
+        @apply mb-6 flex flex-wrap items-center gap-4;
+    }
+
+    .search-input-group {
+        @apply relative flex-1 min-w-[280px];
+    }
+
+    .search-input {
+        @apply w-full bg-white border border-slate-200 rounded-xl pl-11 pr-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all placeholder:text-slate-400;
+    }
+
+    .per-page-select {
+        @apply flex items-center gap-3 bg-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-sm relative;
+    }
+
+    /* Data Table Estructura */
+    .datatable-container {
+        @apply bg-white rounded-xl border border-slate-200/70 shadow-xl shadow-slate-200/20 overflow-x-auto;
+    }
+
+    .datatable {
+        @apply min-w-full border-separate border-spacing-0;
+    }
+
+    .datatable-thead {
+        @apply bg-slate-50/80 backdrop-blur-sm;
+    }
+
+    .datatable-th {
+        @apply px-5 py-3 text-left text-[10px] font-black uppercase tracking-[0.1em] text-slate-500 border-b border-slate-100;
+    }
+
+    .datatable-tr {
+        @apply hover:bg-indigo-50/30 transition-all;
+    }
+
+    .datatable-td {
+        @apply px-5 py-2.5 border-b border-slate-50;
+    }
+
+    /* Badges y Pequeños Componentes */
+    .badge-id {
+        @apply inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 text-slate-500 text-[10px] font-bold transition-colors border border-transparent;
+    }
+
+    .status-pill {
+        @apply inline-flex items-center px-2 py-0.5 rounded-full bg-white text-emerald-600 text-[10px] font-black uppercase border border-emerald-200 shadow-sm shadow-emerald-100/50;
+    }
+
+    /* Botones de Acción Agrupados */
+    .action-group {
+        @apply inline-flex rounded-lg border border-slate-200 shadow-sm overflow-hidden bg-white;
+    }
+
+    /* BOTÓN BASE (Estructura común) */
+    .btn-pro {
+        @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50;
+    }
+
+    /* VARIANTE: PRIMARY (El que ya tenías, estilo Slate/Indigo) */
+    .btn-primary {
+        @apply btn-pro bg-slate-900 text-white hover:bg-indigo-600 shadow-slate-200;
+    }
+
+    /* VARIANTE: SUCCESS (Material Emerald) */
+    .btn-success {
+        @apply btn-pro bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 shadow-emerald-100;
+    }
+
+    /* VARIANTE: DANGER (Material Rose/Red) */
+    .btn-danger {
+        @apply btn-pro bg-rose-100 text-rose-700 border border-rose-200 hover:bg-rose-600 hover:text-white hover:border-rose-600 shadow-rose-100;
+    }
+
+    /* VARIANTE: WARNING (Material Amber) */
+    .btn-warning {
+        @apply btn-pro bg-amber-100 text-amber-700 border border-amber-200 hover:bg-amber-500 hover:text-white hover:border-amber-500 shadow-amber-100;
+    }
+
+    /* VARIANTE: INFO (Material Sky/Blue) */
+    .btn-info {
+        @apply btn-pro bg-sky-100 text-sky-700 border border-sky-200 hover:bg-sky-600 hover:text-white hover:border-sky-600 shadow-sky-100;
+    }
+
+    /* BOTONES DE ACCIÓN (Para la tabla) */
+    .btn-action {
+        @apply flex items-center px-3 py-1.5 text-slate-500 transition-all hover:bg-slate-100 first:rounded-l-lg last:rounded-r-lg;
+    }
+
+    /* Variante específica para el botón de borrar en la tabla */
+    .btn-action-delete {
+        @apply btn-action hover:bg-red-50 hover:text-red-600;
+    }
+
+    /* Variante específica para el botón de editar en la tabla */
+    .btn-action-edit {
+        @apply btn-action hover:bg-indigo-50 hover:text-indigo-600;
+    }
+
+    /* Contenedor Principal */
+    .modal-overlay {
+        @apply fixed inset-0 z-50 flex items-center justify-center p-4;
+    }
+
+    .modal-backdrop {
+        @apply fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity;
+    }
+
+    /* Estructura del Modal */
+    .modal-container {
+        @apply relative bg-white w-full rounded-2xl shadow-2xl shadow-slate-900/20 transform transition-all border border-slate-100 flex flex-col max-h-[90vh] overflow-hidden;
+    }
+
+    /* Secciones */
+    .modal-header {
+        @apply flex-shrink-0 px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between;
+    }
+
+    .modal-body {
+        @apply p-6 overflow-y-auto overflow-x-hidden;
+    }
+
+    .modal-footer {
+        @apply flex-shrink-0 px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end items-center gap-3;
+    }
+
+    /* Elementos Internos */
+    .modal-icon-box {
+        @apply w-8 h-8 rounded-lg bg-gray-500 flex items-center justify-center text-white text-[12px];
+    }
+
+    .modal-title {
+        @apply text-sm font-black text-slate-800 uppercase tracking-wider;
+    }
+
+    .modal-label {
+        @apply block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1;
+    }
+
+    .modal-input-group {
+        @apply relative;
+    }
+
+    .modal-input-icon {
+        @apply absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors text-xs;
+    }
+
+    .modal-input {
+        @apply w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm font-semibold text-slate-700 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all placeholder:text-slate-300;
+    }
+
+    /* Botones */
+    .btn-modal-secondary {
+        @apply px-4 py-2 text-[11px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-all;
+    }
+
+    .btn-modal-primary {
+        @apply relative inline-flex items-center gap-2 px-6 py-2 bg-slate-900 overflow-hidden rounded-xl transition-all hover:bg-indigo-600 active:scale-95 shadow-lg shadow-slate-200 text-white text-[11px] font-black uppercase tracking-widest;
+    }
+
+    /* Scrollbar Fino */
+    .modal-body::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    .modal-body::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .modal-body::-webkit-scrollbar-thumb {
+        @apply bg-slate-200 rounded-full;
+    }
+
+    .modal-body::-webkit-scrollbar-thumb:hover {
+        @apply bg-slate-300;
+    }
+}

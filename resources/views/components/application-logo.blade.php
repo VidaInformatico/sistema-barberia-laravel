@@ -1,0 +1,1 @@
+<img {{ $attributes }} src="{{ isset($company) && $company && $company->logo_path ? asset('storage/'.$company->logo_path) : asset('images/logo.png') }}" alt="Logo">

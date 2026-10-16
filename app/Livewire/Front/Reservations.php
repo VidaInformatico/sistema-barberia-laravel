@@ -1,0 +1,415 @@
+<?php
+
+namespace App\Livewire\Front;
+
+use App\Models\Booking;
+use App\Models\Barber;
+use App\Models\User;
+use App\Models\BarberSchedule;
+use App\Models\BarberBlockedTime;
+use App\Models\Product;
+use App\Models\Service;
+use Livewire\Component;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Jantinnerezo\LivewireAlert\Facades\LivewireAlert;
+use Livewire\Attributes\Computed;
+
+class Reservations extends Component
+{
+    public $barberId = '';
+    public $selectedDate = '';
+    public $selectedTime = '';
+
+    public $currentMonth;
+    public $currentYear;
+
+    public $selectedCategory = '';
+    public $selectedServiceId = null;
+
+    protected function rules()
+    {
+        return [
+            'barberId' => 'required|exists:barbers,id',
+            'selectedDate' => 'required|date|after_or_equal:today',
+            'selectedTime' => 'required',
+        ];
+    }
+
+    protected function validationAttributes()
+    {
+        return [
+            'barberId' => 'barbero',
+            'selectedDate' => 'fecha de reserva',
+            'selectedTime' => 'horario disponible',
+        ];
+    }
+
+    public function mount($serviceId, $barber = null)
+    {
+        if ($barber) {
+            $user = User::where('slug', $barber)->firstOrFail();
+            $this->barberId = $user->barber->id;
+        }
+        $this->selectedServiceId = $serviceId;
+        $this->currentMonth = now()->month;
+        $this->currentYear = now()->year;
+        $this->selectedDate = now()->format('Y-m-d');
+    }
+
+    public function changeMonth($direction)
+    {
+        $date = Carbon::createFromDate($this->currentYear, $this->currentMonth, 1);
+        if ($direction === 'next') {
+            $date->addMonth();
+        } else {
+            $date->subMonth();
+        }
+
+        $this->currentMonth = $date->month;
+        $this->currentYear = $date->year;
+    }
+
+    public function selectDate($day)
+    {
+        $this->selectedDate = Carbon::createFromDate($this->currentYear, $this->currentMonth, $day)->format('Y-m-d');
+        $this->selectedTime = '';
+    }
+
+    public function getSelectedServiceProperty()
+    {
+        if (!$this->selectedServiceId) {
+            return null;
+        }
+
+        $service = Product::find($this->selectedServiceId);
+
+        // Aplicar precio personalizado si existe
+        $customPrice = DB::table('barber_services')
+            ->where('barber_id', $this->barberId)
+            ->where('product_id', $this->selectedServiceId)
+            ->value('custom_price');
+
+        if ($customPrice !== null) {
+            $service->price = $customPrice;
+        }
+
+        return $service;
+    }
+
+    #[Computed()]
+    public function totalPriceSum()
+    {
+        return $this->getSelectedServiceProperty()?->price ?? 0;
+    }
+
+    #[Computed()]
+    public function totalDurationMinutes()
+    {
+        return $this->getSelectedServiceProperty()?->duration_minutes ?? 30;
+    }
+
+    #[Computed()]
+    public function totalDurationFormatted()
+    {
+        $service = $this->getSelectedServiceProperty();
+        $totalMinutes = $service ? $service->duration_minutes : 0;
+
+        if ($totalMinutes === 0) return '0 min';
+
+        $h = intdiv($totalMinutes, 60);
+        $m = $totalMinutes % 60;
+
+        if ($h > 0 && $m > 0) return "{$h}h {$m}min";
+        if ($h > 0) return "{$h}h";
+        return "{$m}min";
+    }
+
+    public function getCalendarDaysProperty()
+    {
+        if (!$this->barberId) return [];
+
+        $firstDayOfMonth = Carbon::createFromDate($this->currentYear, $this->currentMonth, 1);
+        $daysInMonth = $firstDayOfMonth->daysInMonth;
+        $dayOfWeek = $firstDayOfMonth->dayOfWeekIso;
+
+        $days = [];
+
+        for ($i = 1; $i < $dayOfWeek; $i++) {
+            $days[] = ['blank' => true];
+        }
+
+        $blockedFullDays = BarberBlockedTime::where('barber_id', $this->barberId)
+            ->whereYear('date', $this->currentYear)
+            ->whereMonth('date', $this->currentMonth)
+            ->whereNull('start_time')
+            ->pluck('date')
+            ->map(fn($date) => Carbon::parse($date)->day)
+            ->toArray();
+
+        $activeSchedules = BarberSchedule::where('barber_id', $this->barberId)
+            ->where('is_active', true)
+            ->pluck('day_of_week')
+            ->toArray();
+
+        for ($day = 1; $day <= $daysInMonth; $day++) {
+            $loopDate = Carbon::createFromDate($this->currentYear, $this->currentMonth, $day);
+            $dayOfWeekNum = $loopDate->dayOfWeek;
+
+            $isBlocked = in_array($day, $blockedFullDays) || !in_array($dayOfWeekNum, $activeSchedules);
+
+            $days[] = [
+                'blank' => false,
+                'day' => $day,
+                'isPast' => $loopDate->isPast() && !$loopDate->isToday(),
+                'isSunday' => $loopDate->isSunday(),
+                'isBusy' => $isBlocked,
+                'dateString' => $loopDate->format('Y-m-d')
+            ];
+        }
+
+        return $days;
+    }
+
+    public function getAvailableHoursProperty()
+    {
+        if (!$this->selectedDate || !$this->barberId) return [];
+
+        $carbonDate = Carbon::parse($this->selectedDate);
+        $dayOfWeekNum = $carbonDate->dayOfWeek;
+
+        $schedule = BarberSchedule::where('barber_id', $this->barberId)
+            ->where('day_of_week', $dayOfWeekNum)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$schedule) return [];
+
+        $fullDayBlock = BarberBlockedTime::where('barber_id', $this->barberId)
+            ->where('date', $this->selectedDate)
+            ->whereNull('start_time')
+            ->exists();
+
+        if ($fullDayBlock) return [];
+
+        $startTime = Carbon::parse($schedule->start_time);
+        $endTime = Carbon::parse($schedule->end_time);
+        $slots = [];
+
+        $duration = $this->totalDurationMinutes;
+
+        while ($startTime->clone()->addMinutes($duration)->lte($endTime)) {
+            $slots[] = $startTime->format('H:i');
+            $startTime->addMinutes($duration);
+        }
+
+        $bookedTimes = Booking::where('booking_date', $this->selectedDate)
+            ->where('barber_id', $this->barberId)
+            ->whereNotIn('status', [Booking::STATUS_CANCELLED])
+            ->get(['start_time', 'end_time'])
+            ->map(function ($booking) {
+                return [
+                    'start' => Carbon::parse($booking->start_time)->format('H:i'),
+                    'end' => Carbon::parse($booking->end_time)->format('H:i')
+                ];
+            })->toArray();
+
+        $partialBlocks = BarberBlockedTime::where('barber_id', $this->barberId)
+            ->where('date', $this->selectedDate)
+            ->whereNotNull('start_time')
+            ->get(['start_time', 'end_time'])
+            ->map(function ($block) {
+                return [
+                    'start' => Carbon::parse($block->start_time)->format('H:i'),
+                    'end' => Carbon::parse($block->end_time)->format('H:i')
+                ];
+            })->toArray();
+
+        $allRestrictions = array_merge($bookedTimes, $partialBlocks);
+
+        $hoursList = [];
+        $isToday = $carbonDate->isToday();
+        $now = Carbon::now();
+        foreach ($slots as $slot) {
+            $slotStart = Carbon::parse($slot);
+            $slotEnd = $slotStart->clone()->addMinutes($duration);
+            $isAvailable = true;
+
+            if ($isToday) {
+                $fullSlotDateTime = Carbon::parse($this->selectedDate . ' ' . $slot);
+                if ($fullSlotDateTime->lte($now)) {
+                    $isAvailable = false;
+                }
+            }
+
+            foreach ($allRestrictions as $restriction) {
+                $restStart = Carbon::parse($restriction['start']);
+                $restEnd = Carbon::parse($restriction['end']);
+
+                if ($slotStart->lt($restEnd) && $slotEnd->gt($restStart)) {
+                    $isAvailable = false;
+                    break;
+                }
+            }
+
+            $hoursList[] = [
+                'time' => $slot,
+                'formatted' => $slotStart->format('h:i A'),
+                'available' => $isAvailable
+            ];
+        }
+
+        return $hoursList;
+    }
+
+    public function storeBooking()
+    {
+        if (!auth()->check()) {
+            session()->put('url.intended', request()->header('referer') ?? url()->current());
+            
+            return redirect()->route('login');
+        }
+
+        $this->validate();
+
+        $currentBranchId = session('current_branch') ?? \App\Models\Branch::where('active', true)->first()?->id;
+
+        $barberBelongsToBranch = \App\Models\Barber::where('id', $this->barberId)
+            ->whereHas('user', function ($query) use ($currentBranchId) {
+                $query->where('branch_id', $currentBranchId);
+            })
+            ->exists();
+
+        if (!$barberBelongsToBranch) {
+            LivewireAlert::title('El barbero seleccionado no pertenece a la sucursal actual.')
+                ->warning()
+                ->asToast()
+                ->show();
+            return;
+        }
+
+        $carbonDate = Carbon::parse($this->selectedDate);
+        $dayOfWeekNum = $carbonDate->dayOfWeek;
+
+        $schedule = BarberSchedule::where('barber_id', $this->barberId)
+            ->where('day_of_week', $dayOfWeekNum)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$schedule) {
+            $this->addError('selectedTime', 'El barbero no atiende este día.');
+            return;
+        }
+
+        $serviceObj = $this->getSelectedServiceProperty();
+
+        $slotStart = Carbon::parse($this->selectedTime);
+        $slotEnd = $slotStart->clone()->addMinutes((int)$serviceObj->duration_minutes);
+
+        if ($slotStart->lt(Carbon::parse($schedule->start_time)) || $slotEnd->gt(Carbon::parse($schedule->end_time))) {
+            $this->addError('selectedTime', 'El horario excede la jornada laboral.');
+            return;
+        }
+
+
+        try {
+            $booking = DB::transaction(function () use ($slotStart, $slotEnd, $serviceObj, $currentBranchId) {
+
+                $exists = Booking::where('booking_date', $this->selectedDate)
+                    ->where('barber_id', $this->barberId)
+                    ->whereNotIn('status', [Booking::STATUS_CANCELLED])
+                    ->where('start_time', '<', $slotEnd->format('H:i:s'))
+                    ->where('end_time', '>', $slotStart->format('H:i:s'))
+                    ->lockForUpdate()
+                    ->exists();
+
+                if ($exists) {
+                    throw new \Exception('Este horario ya no se encuentra disponible.');
+                }
+
+                $isBlocked = BarberBlockedTime::where('barber_id', $this->barberId)
+                    ->where('date', $this->selectedDate)
+                    ->where(function ($query) use ($slotStart, $slotEnd) {
+                        $query->whereNull('start_time')
+                            ->orWhere(function ($q) use ($slotStart, $slotEnd) {
+                                $q->where('start_time', '<', $slotEnd->format('H:i:s'))
+                                    ->where('end_time', '>', $slotStart->format('H:i:s'));
+                            });
+                    })->exists();
+
+                if ($isBlocked) {
+                    throw new \Exception('Este horario está bloqueado por el barbero.');
+                }
+
+                $newBooking = Booking::create([
+                    'client_id' => Auth::id(),
+                    'barber_id' => $this->barberId,
+                    'branch_id' => $currentBranchId,
+                    'booking_date' => $this->selectedDate,
+                    'start_time' => $slotStart->format('H:i:s'),
+                    'end_time' => $slotEnd->format('H:i:s'),
+                    'status' => Booking::STATUS_PENDING,
+                    'total_price' => $serviceObj->price
+                ]);
+
+                $newBooking->services()->create([
+                    'product_id' => $serviceObj->id,
+                    'service_name' => $serviceObj->name,
+                    'duration_minutes' => $serviceObj->duration_minutes,
+                    'price' => $serviceObj->price
+                ]);
+
+                return $newBooking;
+            });
+
+            LivewireAlert::title('Reserva creada exitosamente.')
+                ->success()
+                ->asToast()
+                ->show();
+
+            return $this->redirect(route('confirmation', ['booking_number' => $booking->booking_number]));
+        } catch (\Exception $e) {
+            $this->addError('selectedTime', $e->getMessage());
+            return;
+        }
+    }
+
+    public function updatedSelectedServiceId()
+    {
+        $this->barberId = '';
+        $this->selectedTime = '';
+
+        $this->selectedServiceId = (int) $this->selectedServiceId;
+    }
+
+    public function updatedSelectedCategory()
+    {
+        $this->selectedServiceId = '';
+        $this->barberId = '';
+        $this->selectedTime = '';
+    }
+
+    public function render()
+    {
+        $barbers = Barber::with('user')
+            ->whereHas('services', function ($query) {
+                $query->where('products.id', $this->selectedServiceId);
+            })
+            ->get()
+            ->map(function ($barber) {
+                $barber->total_services_price = DB::table('barber_services')
+                    ->where('barber_id', $barber->id)
+                    ->where('product_id', $this->selectedServiceId)
+                    ->value('custom_price') ?? 0;
+                return $barber;
+            });
+
+
+        return view('livewire.front.reservations', [
+            'barbers' => $barbers,
+            'clients' => User::where('role', 'client')->get(),
+            'monthName' => Carbon::createFromDate($this->currentYear, $this->currentMonth, 1)->translatedFormat('F Y')
+        ]);
+    }
+}
